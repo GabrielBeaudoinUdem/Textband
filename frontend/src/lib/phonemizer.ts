@@ -1,122 +1,23 @@
 import phoneticsData from '@/data/phonetics.json';
 import type { Language, PhonemeEvent } from '@/types';
-import { loadDictionary } from '@/lib/dictionarySearch';
-
-// Quick index map for O(1) lookups
-const dictionaryIndexMaps: Record<Language, Map<string, string[]> | null> = {
-  en: null,
-  fr: null,
-};
-
-function phonemizeWordFallback(word: string, language: Language): string[] {
-  if (language === 'fr') {
-    const frFallback: Record<string, string[]> = {
-      'a': ['a'], 'b': ['b'], 'c': ['k'], 'd': ['d'], 'e': ['e'],
-      'f': ['f'], 'g': ['ɡ'], 'h': [], 'i': ['i'], 'j': ['ʒ'],
-      'k': ['k'], 'l': ['l'], 'm': ['m'], 'n': ['n'], 'o': ['o'],
-      'p': ['p'], 'q': ['k'], 'r': ['ʁ'], 's': ['s'], 't': ['t'],
-      'u': ['y'], 'v': ['v'], 'w': ['w'], 'x': ['k', 's'], 'y': ['j'],
-      'z': ['z'], 'é': ['e'], 'è': ['ɛ'], 'à': ['a'], 'ù': ['y'],
-      'ou': ['u'], 'ch': ['ʃ'], 'au': ['o'], 'eau': ['o'], 'ai': ['ɛ'],
-      'ei': ['ɛ'], 'eu': ['ø'], 'oi': ['w', 'a'], 'gn': ['ɲ'],
-      'an': ['ɑ̃'], 'am': ['ɑ̃'], 'en': ['ɑ̃'], 'em': ['ɑ̃'],
-      'in': ['ɛ̃'], 'im': ['ɛ̃'], 'on': ['ɔ̃'], 'om': ['ɔ̃'],
-      'un': ['œ̃'], 'um': ['œ̃']
-    };
-    const phonemes: string[] = [];
-    let i = 0;
-    while (i < word.length) {
-      const three = word.slice(i, i + 3);
-      const two = word.slice(i, i + 2);
-      const one = word.slice(i, i + 1);
-      if (frFallback[three]) {
-        phonemes.push(...frFallback[three]);
-        i += 3;
-      } else if (frFallback[two]) {
-        phonemes.push(...frFallback[two]);
-        i += 2;
-      } else if (frFallback[one]) {
-        phonemes.push(...frFallback[one]);
-        i += 1;
-      } else {
-        i += 1;
-      }
-    }
-    return phonemes;
-  } else {
-    const enFallback: Record<string, string[]> = {
-      'a': ['æ'], 'b': ['b'], 'c': ['k'], 'd': ['d'], 'e': ['ɛ'],
-      'f': ['f'], 'g': ['ɡ'], 'h': ['h'], 'i': ['ɪ'], 'j': ['dʒ'],
-      'k': ['k'], 'l': ['l'], 'm': ['m'], 'n': ['n'], 'o': ['ɑ'],
-      'p': ['p'], 'q': ['k'], 'r': ['r'], 's': ['s'], 't': ['t'],
-      'u': ['ʌ'], 'v': ['v'], 'w': ['w'], 'x': ['k', 's'], 'y': ['j'],
-      'z': ['z'],
-      'th': ['θ'], 'sh': ['ʃ'], 'ch': ['tʃ'], 'ng': ['ŋ'], 'ee': ['i'],
-      'oo': ['u'], 'ea': ['i'], 'ai': ['eɪ'], 'ay': ['eɪ'], 'ou': ['aʊ'],
-      'ow': ['aʊ'], 'oi': ['ɔɪ'], 'oy': ['ɔɪ'], 'or': ['ɔ'], 'ar': ['ɑ'],
-      'er': ['ɚ'], 'ir': ['ɚ'], 'ur': ['ɚ']
-    };
-    const phonemes: string[] = [];
-    let i = 0;
-    while (i < word.length) {
-      const two = word.slice(i, i + 2);
-      const one = word.slice(i, i + 1);
-      if (enFallback[two]) {
-        phonemes.push(...enFallback[two]);
-        i += 2;
-      } else if (enFallback[one]) {
-        phonemes.push(...enFallback[one]);
-        i += 1;
-      } else {
-        i += 1;
-      }
-    }
-    return phonemes;
-  }
-}
 
 /**
- * Fetch phonemes client-side for a given text.
+ * Fetch phonemes from the backend for a given text.
  */
 export async function fetchPhonemes(
   text: string, 
   language: Language
 ): Promise<{ text: string, phonemes: string[] }[]> {
   try {
-    const dict = await loadDictionary(language);
-    if (!dictionaryIndexMaps[language]) {
-      const map = new Map<string, string[]>();
-      for (const entry of dict) {
-        map.set(entry.w.toLowerCase().trim(), entry.p);
-      }
-      dictionaryIndexMaps[language] = map;
-    }
-    const indexMap = dictionaryIndexMaps[language]!;
-
-    const wordRegex = /[a-zA-Z0-9À-ÿ'-]+/g;
-    let match;
-    const words: string[] = [];
-    while ((match = wordRegex.exec(text)) !== null) {
-      words.push(match[0]);
-    }
-
-    const wordsData = words.map(w => {
-      const lower = w.toLowerCase().trim();
-      let phonemes: string[] = [];
-      if (indexMap.has(lower)) {
-        phonemes = indexMap.get(lower)!;
-      } else {
-        phonemes = phonemizeWordFallback(lower, language);
-      }
-      return {
-        text: w,
-        phonemes
-      };
+    const res = await fetch('/api/phonemize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
     });
-
-    return wordsData;
+    const data = await res.json();
+    return data.words || [];
   } catch (err) {
-    console.error('Client-side phonemize error:', err);
+    console.error('Phonemize fetch error:', err);
     return [];
   }
 }

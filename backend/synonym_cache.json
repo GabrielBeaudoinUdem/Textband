@@ -686,7 +686,7 @@
       "vividly",
       "profoundly",
       "emphatically",
-      "decisives",
+      "decisively",
       "resolutely",
       "unambiguously",
       "clearly",
@@ -1161,7 +1161,7 @@
       "forcefully",
       "dramatically",
       "strikingly",
-      "impressives",
+      "impressively",
       "significantly",
       "markedly",
       "distinctly",
@@ -1333,7 +1333,6 @@
       "outstanding",
       "remarkable",
       "exceptional",
-      "extraordinary",
       "extraordinary",
       "phenomenal",
       "incredible",
@@ -3187,6 +3186,8 @@
       "severe",
       "extreme",
       "significant",
+      "weighty",
+      "substantial",
       "grave",
       "heavy"
     ],
@@ -3598,7 +3599,6 @@
     "ability": [
       "skill",
       "talent",
-      "knack",
       "aptitude",
       "capacity",
       "competence",
@@ -4020,6 +4020,7 @@
       "moves",
       "passages",
       "alterations",
+      "evolutions",
       "progressions"
     ],
     "laid": [
@@ -4729,11 +4730,11 @@
       "essential",
       "primary",
       "key",
-      "pivotal",
-      "fundamental",
-      "indispensable",
-      "necessary",
-      "decisive"
+      "central",
+      "principal",
+      "elemental",
+      "crucial",
+      "foundational"
     ],
     "enables": [
       "allows",
@@ -5443,7 +5444,7 @@
     "unhealthy": [
       "efficient",
       "safe",
-      "viables"
+      "viable"
     ],
     "internally": [
       "efficient",

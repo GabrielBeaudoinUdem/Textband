@@ -7,9 +7,6 @@ import MidiTrackPanel from '@/components/MidiTrackPanel';
 import TextTrack from '@/components/TextTrack';
 import SynonymRow from '@/components/SynonymRow';
 import { getPhonemeOrder, fetchPhonemes, textToPhonemes } from '@/lib/phonemizer';
-import { fetchSynonymBank } from '@/lib/synonymBankClient';
-import { startLocalTranscription } from '@/lib/whisperClient';
-import { useRouter } from 'next/navigation';
 import { mergeTexts, splitText } from '@/lib/llmClient';
 import Playhead, { setPlayheadPosition } from '@/components/Playhead';
 import TimelineRuler from '@/components/TimelineRuler';
@@ -574,21 +571,8 @@ export default function Home() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [selectedPhonemes, setSelectedPhonemes] = useState<Set<string>>(new Set());
   const [hoveredPhoneme, setHoveredPhoneme] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  }, []);
 
-  const { isExperienceActive, selectedPhrase, stopExperience, participantId, logLLM, logTextHistory, logAction, mistralApiKey } = useExperience();
-  const router = useRouter();
-
-  // Redirect to experience entry if experience is not active
-  useEffect(() => {
-    if (!isExperienceActive) {
-      router.push('/experience');
-    }
-  }, [isExperienceActive, router]);
+  const { isExperienceActive, selectedPhrase, stopExperience, participantId, logLLM, logTextHistory, logAction } = useExperience();
 
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -599,8 +583,6 @@ export default function Home() {
   const startPxRef = useRef<number>(INITIAL_PLAYHEAD_PADDING);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const recognitionRef = useRef<{ stop: () => void } | null>(null);
-  const transcriptionResultRef = useRef<string>('');
 
   // ---- Effects ----
   // Log Text History
@@ -639,10 +621,11 @@ export default function Home() {
           try {
             const [phonemes, synonymBank] = await Promise.all([
               fetchPhonemes(block.text, state.language),
-              fetchSynonymBank(block.text, state.language, mistralApiKey).catch((err) => {
-                showToast("Mistral API call failed. Some features may not work as expected because you didn't set a valid API key.");
-                return undefined;
-              })
+              fetch('/api/synonym-bank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: block.text, language: state.language })
+              }).then(res => res.json()).then(data => data.synonym_bank).catch(() => undefined)
             ]);
             dispatch({ type: 'UPDATE_BLOCK_PHONEMES', id: block.id, phonemes });
             if (synonymBank) {
@@ -1401,51 +1384,67 @@ export default function Home() {
   // ---- STT Logic ----
   const handleStartRecording = useCallback(async () => {
     try {
-      transcriptionResultRef.current = '';
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        sendToTranscription(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
       setIsRecordingSTT(true);
       logAction('STT_START');
-
-      const recognition = startLocalTranscription(
-        state.language,
-        (text) => {
-          transcriptionResultRef.current = text;
-        },
-        (err) => {
-          console.error('Local transcription error:', err);
-          if (err && err.error === 'not-allowed') {
-            alert('Accès au microphone bloqué. Veuillez autoriser l\'utilisation du micro pour ce site dans les paramètres de votre navigateur.');
-          }
-          setIsRecordingSTT(false);
-        }
-      );
-      recognitionRef.current = recognition;
     } catch (err) {
-      console.error('Error starting transcription:', err);
-      alert('Could not start microphone recording.');
-      setIsRecordingSTT(false);
+      console.error('Error accessing microphone:', err);
+      alert('Could not access microphone.');
     }
-  }, [state.language, logAction]);
+  }, [state.language]);
 
   const handleStopRecording = useCallback(() => {
-    if (isRecordingSTT) {
+    if (mediaRecorderRef.current && isRecordingSTT) {
+      mediaRecorderRef.current.stop();
       logAction('STT_STOP');
       setIsRecordingSTT(false);
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-      
-      // Wait a tiny moment for final speech results and add block
-      setTimeout(() => {
-        const finalResult = transcriptionResultRef.current.trim();
-        if (finalResult) {
-          const newBlock = createBlock(finalResult);
-          dispatch({ type: 'ADD_BLOCK', block: newBlock });
-          dispatch({ type: 'SELECT_BLOCK', id: newBlock.id });
-        }
-      }, 300);
     }
-  }, [isRecordingSTT, logAction, dispatch]);
+  }, [isRecordingSTT, logAction]);
+
+  const sendToTranscription = async (blob: Blob) => {
+    setIsTranscribing(true);
+    const formData = new FormData();
+    formData.append('file', blob, 'recording.webm');
+
+    const whisperLang = state.language === 'fr' ? 'french' : 'english';
+    formData.append('language', whisperLang);
+
+    try {
+      const res = await fetch('/api/stt', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.text) {
+        const newBlock = createBlock(data.text);
+        dispatch({ type: 'ADD_BLOCK', block: newBlock });
+        dispatch({ type: 'SELECT_BLOCK', id: newBlock.id });
+      } else if (data.error) {
+        console.error('STT Error:', data.error);
+      }
+    } catch (err) {
+      console.error('STT Request Error:', err);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
 
   const handleMovePlayhead = useCallback((delta: number) => {
     // 1. Collect all word start positions
@@ -1705,26 +1704,6 @@ export default function Home() {
           onClose={() => setShowExitModal(false)}
           onConfirm={handleConfirmExit}
         />
-      )}
-
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '48px',
-          right: '24px',
-          backgroundColor: 'rgba(220, 38, 38, 0.95)',
-          color: '#fff',
-          padding: '12px 20px',
-          borderRadius: '8px',
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          fontSize: '13px',
-          fontWeight: 600,
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          fontFamily: 'Inter, sans-serif'
-        }}>
-          ⚠️ {toastMessage}
-        </div>
       )}
     </div>
   );

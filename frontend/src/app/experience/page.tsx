@@ -5,23 +5,21 @@ import { useExperience } from '@/components/ExperienceLogProvider';
 import phrases from '@/lib/experience_phrases.json';
 
 export default function ExperienceEntryPage() {
-  const [mistralApiKey, setMistralApiKey] = useState('');
+  const [participantId, setParticipantId] = useState('');
+  const [selectedPhrase, setSelectedPhrase] = useState<{ id: string, text: string }>(phrases[0]);
   const [mode, setMode] = useState<'edit' | 'readonly'>('edit');
   const [isLoading, setIsLoading] = useState(false);
   const { startExperience } = useExperience();
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!participantId.trim()) {
+      alert('Veuillez entrer un ID de participant.');
+      return;
+    }
     setIsLoading(true);
-
     try {
-      // Default to Participant 'Guest' and first phrase 'exp3' (3 sentences with cached synonyms)
-      await startExperience(
-        'Guest',
-        phrases[0],
-        mode,
-        mistralApiKey.trim()
-      );
+      await startExperience(participantId.trim(), selectedPhrase, mode);
     } catch (err) {
       console.error(err);
     } finally {
@@ -33,52 +31,55 @@ export default function ExperienceEntryPage() {
     <div className="exp-container">
       <div className="exp-card">
         <div className="exp-header">
-          <h1 className="exp-title">TextBand</h1>
+          <h1 className="exp-title">Étude TextBand</h1>
           <p className="exp-subtitle">
-            Standalone web version setup.
+            Bienvenue dans l'étude utilisateur. Veuillez entrer vos informations pour commencer.
           </p>
         </div>
 
         <form onSubmit={handleStart} className="exp-form">
-
           <div className="exp-field">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-              <label className="exp-label" style={{ paddingLeft: '4px', margin: 0 }}>Mistral API Key</label>
-              <a
-                href="https://admin.mistral.ai/organization/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  marginLeft: '8px',
-                  fontSize: '11px',
-                  textTransform: 'none',
-                  color: 'var(--accent-blue, #6366f1)',
-                  textDecoration: 'underline',
-                  fontWeight: 'normal'
-                }}
-              >
-                (You can find a free key here)
-              </a>
-            </div>
+            <label className="exp-label">ID du Participant</label>
             <input
-              type="password"
-              value={mistralApiKey}
-              onChange={(e) => setMistralApiKey(e.target.value)}
-              placeholder="Enter your Mistral API Key..."
+              type="text"
+              value={participantId}
+              onChange={(e) => setParticipantId(e.target.value)}
+              placeholder="e.g. P01"
               className="exp-input"
+              required
             />
           </div>
 
           <div className="exp-field">
-            <label className="exp-label">Experience Mode</label>
+            <label className="exp-label">Phrase à tester</label>
+            <div className="select-wrapper">
+              <select
+                value={selectedPhrase.id}
+                onChange={(e) => {
+                  const phrase = phrases.find(p => p.id === e.target.value);
+                  if (phrase) setSelectedPhrase(phrase);
+                }}
+                className="select exp-select"
+              >
+                {phrases.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title || p.text}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="exp-field">
+            <label className="exp-label">Mode d'expérience</label>
             <div className="select-wrapper">
               <select
                 value={mode}
                 onChange={(e) => setMode(e.target.value as 'edit' | 'readonly')}
                 className="select exp-select"
               >
-                <option value="edit">With Editing</option>
-                <option value="readonly">Without Editing</option>
+                <option value="edit">Avec Édition</option>
+                <option value="readonly">Sans Édition</option>
               </select>
             </div>
           </div>
@@ -91,12 +92,12 @@ export default function ExperienceEntryPage() {
             {isLoading ? (
               <>
                 <div className="spinner-small"></div>
-                Initializing...
+                Initialisation...
               </>
             ) : (
               <>
-                Start Experience
-                <svg className="exp-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+                Commencer l'expérience
+                <svg className="exp-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </>
@@ -104,23 +105,10 @@ export default function ExperienceEntryPage() {
           </button>
         </form>
 
-        {/* Warning Banner in Yellow/Amber */}
-        <div style={{
-          backgroundColor: 'rgba(217, 119, 6, 0.1)',
-          border: '1px solid rgba(217, 119, 6, 0.3)',
-          borderRadius: '8px',
-          padding: '16px',
-          color: '#d97706',
-          fontSize: '13px',
-          lineHeight: '1.6',
-          marginTop: '16px',
-          display: 'flex',
-          gap: '12px'
-        }}>
-          <div style={{ fontSize: '18px', marginTop: '2px' }}>⚠️</div>
-          <div>
-            <strong>Warning:</strong> This simplified web version of TextBand is designed for testing the application directly in the browser. It differs from the version used during the scientific experiment (which did not use the Mistral model). Additionally, due to Mistral API rate limits, a 1.1 second delay is applied during synonym lookup, making the processing slower than the original experiment (which relied on an instant local cache).
-          </div>
+        <div className="exp-footer-note">
+          <p>
+            <strong>Note:</strong> L'enregistrement de l'écran sera activé au début de l'expérience. Vos données seront enregistrées anonymement pour la recherche.
+          </p>
         </div>
       </div>
     </div>

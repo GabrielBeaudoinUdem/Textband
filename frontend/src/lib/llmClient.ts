@@ -2,16 +2,6 @@ interface LLMResponse {
   choices: { message: { content: string } }[];
 }
 
-let globalMistralApiKey = '';
-
-export function setMistralApiKey(key: string) {
-  globalMistralApiKey = key;
-}
-
-export function getMistralApiKey() {
-  return globalMistralApiKey;
-}
-
 async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
   try {
     console.log('--- LLM REQUEST ---');
@@ -19,34 +9,14 @@ async function callLLM(systemPrompt: string, userPrompt: string): Promise<string
     console.log('User Prompt:', userPrompt);
     console.log('-------------------');
 
-    let response;
-    if (globalMistralApiKey) {
-      response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${globalMistralApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'mistral-large-latest',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 1024
-        })
-      });
-    } else {
-      response = await fetch('/api/llm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, userPrompt }),
-      });
-    }
+    const response = await fetch('/api/llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemPrompt, userPrompt }),
+    });
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      const data = await response.json();
       throw new Error(data.error || `Server error: ${response.status}`);
     }
 

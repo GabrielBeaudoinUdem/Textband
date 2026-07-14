@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { setMistralApiKey as setLLMMistralApiKey } from '@/lib/llmClient';
 
 interface ExperienceContextType {
   participantId: string | null;
@@ -10,8 +9,7 @@ interface ExperienceContextType {
   selectedPhrase: string | null;
   experienceMode: 'edit' | 'readonly';
   isExperienceActive: boolean;
-  mistralApiKey: string;
-  startExperience: (id: string, phrase: { id: string, text: string }, mode: 'edit' | 'readonly', apiKey: string) => Promise<void>;
+  startExperience: (id: string, phrase: { id: string, text: string }, mode: 'edit' | 'readonly') => Promise<void>;
   stopExperience: (finalText: string) => Promise<void>;
   logLLM: (direction: 'sent' | 'received', content: any) => void;
   logTextHistory: (text: string) => void;
@@ -32,38 +30,67 @@ export const ExperienceLogProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedPhrase, setSelectedPhrase] = useState<string | null>(null);
   const [experienceMode, setExperienceMode] = useState<'edit' | 'readonly'>('edit');
   const [isExperienceActive, setIsExperienceActive] = useState(false);
-  const [mistralApiKey, setMistralApiKeyState] = useState<string>('');
   
 
   const router = useRouter();
 
-  // Helper to call our API (Disabled for online version)
+  // Helper to call our API
   const apiCall = useCallback(async (data: any) => {
-    // No-op
-  }, []);
+    if (!participantId) return;
+    try {
+      await fetch('/api/experience', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, phraseId, ...data }),
+      });
+    } catch (err) {
+      console.error('Logging failed', err);
+    }
+  }, [participantId]);
 
   const logLLM = useCallback((direction: 'sent' | 'received', content: any) => {
-    // No-op
-  }, []);
+    if (!isExperienceActive) return;
+    apiCall({
+      type: 'log',
+      filename: 'llm_logs.txt',
+      content: `[LLM ${direction.toUpperCase()}] ${JSON.stringify(content)}`
+    });
+  }, [isExperienceActive, apiCall]);
 
   const logTextHistory = useCallback((text: string) => {
-    // No-op
-  }, []);
+    if (!isExperienceActive) return;
+    apiCall({
+      type: 'log',
+      filename: 'text_history.txt',
+      content: text
+    });
+  }, [isExperienceActive, apiCall]);
 
   const logAction = useCallback((actionType: string, details?: any) => {
-    // No-op
-  }, []);
+    if (!isExperienceActive) return;
+    apiCall({
+      type: 'log',
+      filename: 'interaction_logs.txt',
+      content: `[ACTION] ${actionType} ${details ? JSON.stringify(details) : ''}`
+    });
+  }, [isExperienceActive, apiCall]);
 
 
 
-  const startExperience = async (id: string, phrase: { id: string, text: string }, mode: 'edit' | 'readonly', apiKey: string) => {
+  const startExperience = async (id: string, phrase: { id: string, text: string }, mode: 'edit' | 'readonly') => {
     setParticipantId(id);
     setPhraseId(phrase.id);
     setSelectedPhrase(phrase.text);
     setExperienceMode(mode);
-    setMistralApiKeyState(apiKey);
-    setLLMMistralApiKey(apiKey);
     
+    // Create directory
+    await fetch('/api/experience', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId: id, phraseId: phrase.id, type: 'init' }),
+    });
+
+
     setIsExperienceActive(true);
     router.push(mode === 'readonly' ? '/readonly' : '/');
   };
@@ -71,20 +98,50 @@ export const ExperienceLogProvider: React.FC<{ children: React.ReactNode }> = ({
   const stopExperience = async (finalText: string) => {
     if (!participantId) return;
 
+    // Save final text
+    await fetch('/api/experience', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId, phraseId, type: 'final_text', content: finalText }),
+    });
+    
+
+
     setIsExperienceActive(false);
     setParticipantId(null);
     setPhraseId(null);
     setSelectedPhrase(null);
-    setMistralApiKeyState('');
-    setLLMMistralApiKey('');
     setExperienceMode('edit');
     router.push('/experience');
   };
 
-  // Global Event Logging (Disabled for online version)
+  // Global Event Logging
   useEffect(() => {
-    // No-op
-  }, []);
+    if (!isExperienceActive) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      apiCall({
+        type: 'log',
+        content: `CLICK - x: ${e.clientX}, y: ${e.clientY}, target: ${target.tagName}, id: ${target.id}, text: ${target.innerText?.slice(0, 20)}`
+      });
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      apiCall({
+        type: 'log',
+        content: `KEYDOWN - key: ${e.key}, code: ${e.code}, target: ${(e.target as HTMLElement).tagName}`
+      });
+    };
+
+    window.addEventListener('click', handleClick);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExperienceActive, apiCall]);
 
   return (
     <ExperienceContext.Provider value={{
@@ -93,7 +150,6 @@ export const ExperienceLogProvider: React.FC<{ children: React.ReactNode }> = ({
       selectedPhrase,
       experienceMode,
       isExperienceActive,
-      mistralApiKey,
       startExperience,
       stopExperience,
       logLLM,

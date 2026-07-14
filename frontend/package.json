@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
-    "start": "next start",
-    "copy-cache": "node -e \"const fs = require('fs'); fs.mkdirSync('./src/data', { recursive: true }); fs.copyFileSync('../backend/synonym_cache.json', './src/data/synonym_cache.json')\""
+    "start": "next start"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

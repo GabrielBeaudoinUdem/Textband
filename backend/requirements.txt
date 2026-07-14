@@ -1,0 +1,10 @@
+torch
+fastapi
+uvicorn
+transformers
+librosa
+soundfile
+python-multipart
+g2p-en
+gruut
+python-dotenv

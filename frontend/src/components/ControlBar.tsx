@@ -193,6 +193,18 @@ export default function ControlBar({
 
       {/* RIGHT section: Import / Export */}
       <div className="control-bar__right">
+        <div className="tempo-input">
+          <span className="tempo-input__label">Language</span>
+          <select
+            className="select"
+            value={language}
+            disabled={isReadOnly}
+            onChange={(e) => onLanguageChange(e.target.value as Language)}
+          >
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
 
         <div className="control-bar__divider" />
 
