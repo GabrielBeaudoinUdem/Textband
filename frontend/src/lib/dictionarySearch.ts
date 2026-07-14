@@ -21,7 +21,9 @@ export async function loadDictionary(language: Language): Promise<DictWord[]> {
   }
 
   try {
-    const res = await fetch(`/dictionaries/${language}.json`);
+    const isProd = process.env.NODE_ENV === 'production';
+    const basePath = isProd ? '/Textband' : '';
+    const res = await fetch(`${basePath}/dictionaries/${language}.json`);
     if (!res.ok) throw new Error(`Failed to load ${language} dictionary`);
     const data: DictWord[] = await res.json();
     dictCaches[language] = data;

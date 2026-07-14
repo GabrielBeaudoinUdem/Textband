@@ -44,13 +44,17 @@ function getAudioContext() {
 const audioBufferCache = new Map<string, AudioBuffer>();
 
 async function fetchAudioBuffer(url: string, ctx: AudioContext): Promise<AudioBuffer> {
-  if (audioBufferCache.has(url)) {
-    return audioBufferCache.get(url)!;
+  const isProd = process.env.NODE_ENV === 'production';
+  const basePath = isProd ? '/Textband' : '';
+  const resolvedUrl = url.startsWith('http') ? url : `${basePath}${url}`;
+
+  if (audioBufferCache.has(resolvedUrl)) {
+    return audioBufferCache.get(resolvedUrl)!;
   }
-  const response = await fetch(url);
+  const response = await fetch(resolvedUrl);
   const arrayBuffer = await response.arrayBuffer();
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-  audioBufferCache.set(url, audioBuffer);
+  audioBufferCache.set(resolvedUrl, audioBuffer);
   return audioBuffer;
 }
 
